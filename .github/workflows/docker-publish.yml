@@ -9,7 +9,7 @@ on:
 env:
   REGISTRY: docker.io
   # Use explicit Docker Hub username instead of GitHub username
-  DOCKERHUB_NAMESPACE: faheempechuho56
+  DOCKERHUB_NAMESPACE: sheryarkayani
 
 jobs:
   build-and-push:

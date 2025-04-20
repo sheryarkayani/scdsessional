@@ -19,7 +19,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+api-gateway:
+  image: sheryarkayani/cafe-api-gateway:latest
 
+menu-service:
+  image: sheryarkayani/cafe-menu-service:latest
+
+# ... and similarly for other services
   api-gateway:
     image: ${DOCKERHUB_USERNAME:-faheempechuho56}/cafe-api-gateway:latest
     container_name: cafe-api-gateway
