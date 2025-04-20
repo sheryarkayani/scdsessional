@@ -1,0 +1,138 @@
+version: '3'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: cafe-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - cafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongo", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: cafe-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MENU_SERVICE_URL=http://menu-service:3001
+      - ORDER_SERVICE_URL=http://order-service:3002
+      - PAYMENT_SERVICE_URL=http://payment-service:3003
+      - INVENTORY_SERVICE_URL=http://inventory-service:3004
+      - CUSTOMER_SERVICE_URL=http://customer-service:3005
+    depends_on:
+      - menu-service
+      - order-service
+      - payment-service
+      - inventory-service
+      - customer-service
+    networks:
+      - cafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  menu-service:
+    build: ./menu-services
+    container_name: cafe-menu-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/cafe_menu
+    depends_on:
+      - mongodb
+    networks:
+      - cafe-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  order-service:
+    build: ./order-services
+    container_name: cafe-order-service
+    ports:
+      - "3002:3002"
+    environment:
+      - PORT=3002
+      - MONGODB_URI=mongodb://mongodb:27017/cafe_orders
+      - MENU_SERVICE_URL=http://localhost:3001
+      - INVENTORY_SERVICE_URL=http://localhost:3004
+      - CUSTOMER_SERVICE_URL=http://localhost:3005
+      
+    depends_on:
+      - mongodb
+      - menu-service
+      - inventory-service
+    networks:
+      - cafe-network
+    restart: unless-stopped
+
+  payment-service:
+    build: ./payment-services
+    container_name: cafe-payment-service
+    ports:
+      - "3003:3003"
+    environment:
+      - PORT=3003
+      - MONGODB_URI=mongodb://mongodb:27017/cafe_payments
+      - ORDER_SERVICE_URL=http://localhost:3002
+    depends_on:
+      - mongodb
+      - order-service
+    networks:
+      - cafe-network
+    restart: unless-stopped
+
+  inventory-service:
+    build: ./inventory-services
+    container_name: cafe-inventory-service
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - MONGODB_URI=mongodb://mongodb:27017/cafe_inventory
+    depends_on:
+      - mongodb
+    networks:
+      - cafe-network
+    restart: unless-stopped
+
+  customer-service:
+    build: ./customer-services
+    container_name: cafe-customer-service
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - MONGODB_URI=mongodb://mongodb:27017/cafe_customers
+    depends_on:
+      - mongodb
+    networks:
+      - cafe-network
+    restart: unless-stopped
+
+networks:
+  cafe-network:
+    driver: bridge
+
+volumes:
+  mongodb_data: 
