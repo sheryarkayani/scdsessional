@@ -13,6 +13,7 @@ jobs:
     strategy:
       matrix:
         service: [api-gateway, menu-services, order-services, customer-services, inventory-services, payment-services]
+      fail-fast: false
     
     steps:
       - uses: actions/checkout@v3
@@ -21,16 +22,38 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+      
+      - name: Cache Node Modules
+        uses: actions/cache@v3
+        id: cache-node-modules
+        with:
+          path: ${{ matrix.service }}/node_modules
+          key: ${{ runner.os }}-node-${{ matrix.service }}-${{ hashFiles(format('{0}/package-lock.json', matrix.service)) }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.service }}-
       
       - name: Install dependencies
         working-directory: ${{ matrix.service }}
-        run: npm ci
+        run: npm install
+      
+      - name: Check if lint script exists
+        id: check_lint
+        working-directory: ${{ matrix.service }}
+        run: |
+          if grep -q '"lint"' package.json; then
+            echo "::set-output name=has_lint::true"
+          else
+            echo "::set-output name=has_lint::false"
+          fi
       
       - name: Lint
         working-directory: ${{ matrix.service }}
-        run: npm run lint || echo "No lint script configured"
+        if: steps.check_lint.outputs.has_lint == 'true'
+        run: npm run lint
+      
+      - name: Skip Lint
+        if: steps.check_lint.outputs.has_lint != 'true'
+        run: echo "No lint script configured for ${{ matrix.service }}, skipping."
 
   test:
     name: Test Services
@@ -39,6 +62,7 @@ jobs:
     strategy:
       matrix:
         service: [api-gateway, menu-services, order-services, customer-services, inventory-services, payment-services]
+      fail-fast: false
     
     steps:
       - uses: actions/checkout@v3
@@ -47,16 +71,39 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: ${{ matrix.service }}/package-lock.json
+      
+      - name: Cache Node Modules
+        uses: actions/cache@v3
+        id: cache-node-modules
+        with:
+          path: ${{ matrix.service }}/node_modules
+          key: ${{ runner.os }}-node-${{ matrix.service }}-${{ hashFiles(format('{0}/package-lock.json', matrix.service)) }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.service }}-
       
       - name: Install dependencies
         working-directory: ${{ matrix.service }}
-        run: npm ci
+        if: steps.cache-node-modules.outputs.cache-hit != 'true'
+        run: npm install
+      
+      - name: Check if test script exists
+        id: check_test
+        working-directory: ${{ matrix.service }}
+        run: |
+          if grep -q '"test"' package.json && ! grep -q '"test": "echo \\"Error: no test specified\\" && exit 1"' package.json; then
+            echo "::set-output name=has_test::true"
+          else
+            echo "::set-output name=has_test::false"
+          fi
       
       - name: Run tests
         working-directory: ${{ matrix.service }}
-        run: npm test || echo "No test script configured"
+        if: steps.check_test.outputs.has_test == 'true'
+        run: npm test
+      
+      - name: Skip Tests
+        if: steps.check_test.outputs.has_test != 'true'
+        run: echo "No real test script configured for ${{ matrix.service }}, skipping."
 
   build:
     name: Build Services
